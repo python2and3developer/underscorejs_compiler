@@ -1,4 +1,4 @@
-# Underscore template compiler
+# Underscore.js template compiler
 Python utility to compile automatically to a javascript file all the underscore.js templates in a directory.
 
 The script is constantly observing changes in some of the templates files. When some of the templates files are
