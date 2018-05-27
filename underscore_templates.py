@@ -23,7 +23,7 @@ TEMPLATE_EXTENSION = "tmpl"
 
 EVALUATE_PATTERN = r"<%([\s\S]+?)%>"
 INTERPOLATE_PATTERN = r"<%=([\s\S]+?)%>"
-ESCAPE_PATTERN = "<%-([\s\S]+?)%>"
+ESCAPE_PATTERN = r"<%-([\s\S]+?)%>"
 
 VARIABLE_NAME = None
 
@@ -177,11 +177,18 @@ class Underscore_Compiler(object):
     def __init__(self,
         path_to_underscorejs=False,
         browser_name=None,
-        requirejs_compliant=False,
-        remove_whitespaces=True):
+        requirejs=False,
+        remove_whitespaces=True,
+        evaluate_pattern=EVALUATE_PATTERN,
+        interpolate_pattern=INTERPOLATE_PATTERN,
+        escape_pattern=ESCAPE_PATTERN):
 
         if browser_name is None:
-            _compile_template = compile_template
+            _compile_template = lambda template: compile_template(
+                                                                template,
+                                                                evaluate_pattern=evaluate_pattern,
+                                                                interpolate_pattern=interpolate_pattern,
+                                                                escape_pattern=escape_pattern)
         else:
             from selenium import webdriver
 
@@ -199,6 +206,14 @@ class Underscore_Compiler(object):
             else:
                 with io.open(path_to_underscorejs, 'r', encoding='utf8') as f:
                     underscore_js = f.read()
+            if evaluate_pattern != EVALUATE_PATTERN:
+                underscore_js += "\n_.templateSettings.evaluate=/"+evaluate_pattern+"/g"
+
+            if interpolate_pattern != INTERPOLATE_PATTERN:
+                underscore_js += "\n_.templateSettings.interpolate=/"+interpolate_pattern+"/g"
+
+            if escape_pattern != ESCAPE_PATTERN:
+                underscore_js += "\n_.templateSettings.escape=/"+escape_pattern+"/g"
 
             def _compile_template(tmpl):
                 compiled_template = compile_template_in_browser(tmpl, driver, underscore_js=underscore_js)
@@ -208,13 +223,13 @@ class Underscore_Compiler(object):
             atexit.register(driver.quit)
 
         self._remove_whitespaces = remove_whitespaces
-        self._requirejs_compliant = requirejs_compliant
+        self._requirejs = requirejs
 
         self._compile_template = _compile_template
 
-    def compile_templates(self, list_of_templates, remove_whitespaces=None, requirejs_compliant=None):
-        if requirejs_compliant is None:
-            requirejs_compliant = self._requirejs_compliant
+    def compile_templates(self, list_of_templates, remove_whitespaces=None, requirejs=None):
+        if requirejs is None:
+            requirejs = self._requirejs
 
         if remove_whitespaces is None:
             remove_whitespaces = self._remove_whitespaces
@@ -234,12 +249,12 @@ class Underscore_Compiler(object):
             js += "\n"
             js += 'templates["%s"] = %s'%(template_name, compiled_template)
 
-        if requirejs_compliant:
+        if requirejs:
             js = "define('templates', function() {\n" +js + "\nreturn templates\n})"
 
         return js
 
-    def compile_template_files(self, list_of_templates_paths, remove_whitespaces=None, requirejs_compliant=None):
+    def compile_template_from_files(self, list_of_templates_paths, remove_whitespaces=None, requirejs=None):
         def template_generator():
             for template_path in list_of_templates_paths:
                 print("compiling "+template_path+"...")
@@ -251,12 +266,12 @@ class Underscore_Compiler(object):
 
                 yield template_name, template
 
-        return self.compile_templates(template_generator(), remove_whitespaces=remove_whitespaces, requirejs_compliant=requirejs_compliant)
+        return self.compile_templates(template_generator(), remove_whitespaces=remove_whitespaces, requirejs=requirejs)
 
-    def compile_all_templates_in_dir(self,template_directory, output=None, remove_whitespaces=None, requirejs_compliant=None, template_extension=TEMPLATE_EXTENSION):
+    def compile_templates_in_dir(self,template_directory, output=None, remove_whitespaces=None, requirejs=None, template_extension=TEMPLATE_EXTENSION):
         list_of_templates_paths = glob.glob(os.path.join(template_directory, "*."+template_extension))
 
-        js = self.compile_template_files(list_of_templates_paths, remove_whitespaces=remove_whitespaces, requirejs_compliant=requirejs_compliant)
+        js = self.compile_template_from_files(list_of_templates_paths, remove_whitespaces=remove_whitespaces, requirejs=requirejs)
 
         if output is not None:
             with io.open(output,'w',encoding='utf8') as f:
@@ -276,21 +291,27 @@ class Handler(PatternMatchingEventHandler):
 def run_observer(
         template_directory,
         output,
-        requirejs_compliant=False,
+        requirejs=False,
         remove_whitespaces=False,
         browser_name=None,
         path_to_underscorejs=False,
-        template_extension=TEMPLATE_EXTENSION):
+        template_extension=TEMPLATE_EXTENSION,
+        evaluate_pattern=EVALUATE_PATTERN,
+        interpolate_pattern=INTERPOLATE_PATTERN,
+        escape_pattern=ESCAPE_PATTERN):
 
     observer = Observer()
 
     underscore_compiler = Underscore_Compiler(
         path_to_underscorejs=path_to_underscorejs,
         browser_name=browser_name,
-        requirejs_compliant=requirejs_compliant)
+        requirejs=requirejs,
+        evaluate_pattern=evaluate_pattern,
+        escape_pattern=escape_pattern,
+        interpolate_pattern=interpolate_pattern)
 
     def compile_all():
-        underscore_compiler.compile_all_templates_in_dir(
+        underscore_compiler.compile_templates_in_dir(
             template_directory,
             output=output,
             template_extension=template_extension)
@@ -315,22 +336,29 @@ def run_observer(
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description="Compile all underscore templates in a directory")
-    parser.add_argument("--template-dir", default=os.getcwd(), help="Template directory")
+    parser.add_argument("template_dir", default=os.getcwd(), help="Template directory")
     parser.add_argument("-o", "--output", default="templates.js", help="Path to javascript file for writing the compiled templates.")
     parser.add_argument("--remove-whitespaces", action="store_true", default=False, help="Condense whitespaces")
     parser.add_argument("--requirejs", action="store_true", default=False, help="Template should be requirejs compliant")
     parser.add_argument("--path-to-underscorejs", default=False, help="Path to underscore.js library")
     parser.add_argument("--template-extension", default=TEMPLATE_EXTENSION, help="Extension file of templates")
     parser.add_argument("--browser", "-b", default=None, help="Browser name")
+    parser.add_argument("--evaluate-pattern", default=EVALUATE_PATTERN, help="Evaluate pattern")
+    parser.add_argument("--escape-pattern", default=ESCAPE_PATTERN, help="Escape pattern")
+    parser.add_argument("--interpolate-pattern", default=INTERPOLATE_PATTERN, help="Interpolate pattern")
+
     args = parser.parse_args()
 
     template_directory = args.template_dir
     path_to_underscorejs = args.path_to_underscorejs
-    requirejs_compliant = args.requirejs
+    requirejs = args.requirejs
     output = args.output
     remove_whitespaces = args.remove_whitespaces
     template_extension = args.template_extension
     browser_name = args.browser
+    evaluate_pattern = args.evaluate_pattern
+    escape_pattern = args.escape_pattern
+    interpolate_pattern = args.interpolate_pattern
 
     if browser_name is not None:
         browser_name = browser_name.lower()
@@ -339,8 +367,11 @@ if __name__ == '__main__':
         template_directory,
         output,
         remove_whitespaces=remove_whitespaces,
-        requirejs_compliant=requirejs_compliant,
+        requirejs=requirejs,
         path_to_underscorejs=path_to_underscorejs,
         browser_name=browser_name,
-        template_extension=template_extension)
+        template_extension=template_extension,
+        evaluate_pattern=evaluate_pattern,
+        escape_pattern=escape_pattern,
+        interpolate_pattern=interpolate_pattern)
 

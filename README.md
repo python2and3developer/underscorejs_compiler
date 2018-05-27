@@ -6,18 +6,23 @@ edited, the script automatically compile all the templates in one javascript fil
 
 ## Usage
 ```
-underscore_templates.py [-h] [--template-dir TEMPLATE_DIR] [-o OUTPUT]
-                               [--remove-whitespaces] [--requirejs]
+underscore_templates.py [-h] [-o OUTPUT] [--remove-whitespaces]
+                               [--requirejs]
                                [--path-to-underscorejs PATH_TO_UNDERSCOREJS]
                                [--template-extension TEMPLATE_EXTENSION]
                                [--browser BROWSER]
+                               [--evaluate-pattern EVALUATE_PATTERN]
+                               [--escape-pattern ESCAPE_PATTERN]
+                               [--interpolate-pattern INTERPOLATE_PATTERN]
+                               template_dir
 
 Compile all underscore templates in a directory
 
+positional arguments:
+  template_dir          Template directory
+
 optional arguments:
   -h, --help            show this help message and exit
-  --template-dir TEMPLATE_DIR
-                        Template directory
   -o OUTPUT, --output OUTPUT
                         Path to javascript file for writing the compiled
                         templates.
@@ -29,4 +34,10 @@ optional arguments:
                         Extension file of templates
   --browser BROWSER, -b BROWSER
                         Browser name
+  --evaluate-pattern EVALUATE_PATTERN
+                        Evaluate pattern
+  --escape-pattern ESCAPE_PATTERN
+                        Escape pattern
+  --interpolate-pattern INTERPOLATE_PATTERN
+                        Interpolate pattern
 ```
